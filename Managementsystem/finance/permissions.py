@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from rest_framework.permissions import BasePermission
+
+
+class CanManageFinance(BasePermission):
+    def has_permission(self, request, view):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        return user.is_superuser or user.has_role("SCHOOL_ADMIN") or user.has_role("FINANCE_OFFICER")
+
+
+class CanViewFinanceOwnData(BasePermission):
+    def has_permission(self, request, view):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        return user.has_role("STUDENT") or user.has_role("PARENT") or user.has_role("TEACHER")

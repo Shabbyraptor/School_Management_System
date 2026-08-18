@@ -2,7 +2,7 @@
 
 Project goal:
 
-Create a complete education ERP dashboard for a multi-school admin platform. The design should feel professional, clean, and enterprise-ready, with a strong focus on school administration, student management, academic tracking, attendance, examinations, and finance.
+Create a complete education ERP dashboard for a multi-school admin platform. 
 
 
 ## Development

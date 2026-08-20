@@ -4,6 +4,7 @@ Project goal:
 
 Create a complete education ERP dashboard for a multi-school admin platform. 
 
+https://schoolharmonyhubv1.lovable.app
 
 ## Development
 

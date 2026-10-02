@@ -53,13 +53,15 @@ class UserSerializer(serializers.ModelSerializer):
             "profile_photo",
             "is_active",
             "is_staff",
+            "is_superuser",
             "is_verified",
             "date_joined",
+            "last_login",
             "school",
             "profile",
             "roles",
         ]
-        read_only_fields = ["id", "date_joined", "profile", "roles"]
+        read_only_fields = ["id", "is_superuser", "date_joined", "last_login", "profile", "roles"]
 
     def get_roles(self, obj: UserModel) -> list[str]:
         return obj.roles_list

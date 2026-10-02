@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.access import ScopedQuerysetMixin
 from .models import Enrollment, Guardian, Parent, Student, StudentDocument
-from .permissions import IsParentLinked, IsSchoolAdminOrAdmissionsOfficer, IsStudentOwner
 from .serializers import (
     EnrollmentSerializer,
     GuardianSerializer,
@@ -19,19 +18,16 @@ from .serializers import (
 from .services import EnrollmentService, ParentService, StudentService
 
 
-class StudentViewSet(viewsets.ModelViewSet):
+class StudentViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+    policy = "students"
+    school_path = "school"
+    student_path = "id"
     queryset = Student.objects.select_related("school", "user", "current_class", "current_stream").all()
     serializer_class = StudentSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["first_name", "last_name", "admission_number", "email"]
     ordering_fields = ["admission_number", "first_name", "created_at"]
     ordering = ["-created_at"]
-
-    def get_permissions(self):
-        if self.action in {"create", "update", "partial_update", "destroy", "promote", "transfer", "graduate", "archive"}:
-            return [IsAuthenticated(), IsSchoolAdminOrAdmissionsOfficer()]
-        return [IsAuthenticated(), IsStudentOwner() | IsParentLinked()]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -43,7 +39,12 @@ class StudentViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        student = StudentService.admit_student(serializer.validated_data, request.user.school)
+        data = dict(serializer.validated_data)
+        # The payload's school wins; fall back to the admin's own school.
+        school = data.pop("school", None) or request.user.school
+        if school is None:
+            return Response({"school": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        student = StudentService.admit_student(data, school)
         return Response(StudentSerializer(student, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="promote")
@@ -71,61 +72,47 @@ class StudentViewSet(viewsets.ModelViewSet):
         return Response({"status": "archived"}, status=status.HTTP_200_OK)
 
 
-class ParentViewSet(viewsets.ModelViewSet):
+class ParentViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+    policy = "guardians"
+    school_path = "school"
     queryset = Parent.objects.select_related("school", "user").all()
     serializer_class = ParentSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["first_name", "last_name", "email"]
     ordering_fields = ["first_name", "last_name"]
     ordering = ["first_name"]
 
-    def get_permissions(self):
-        if self.action in {"create", "update", "partial_update", "destroy"}:
-            return [IsAuthenticated(), IsSchoolAdminOrAdmissionsOfficer()]
-        return [IsAuthenticated(), IsParentLinked() | IsSchoolAdminOrAdmissionsOfficer()]
 
-
-class GuardianViewSet(viewsets.ModelViewSet):
+class GuardianViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+    policy = "guardians"
+    school_path = "school"
     queryset = Guardian.objects.select_related("school").all()
     serializer_class = GuardianSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["first_name", "last_name", "email"]
     ordering_fields = ["first_name", "last_name"]
     ordering = ["first_name"]
 
-    def get_permissions(self):
-        if self.action in {"create", "update", "partial_update", "destroy"}:
-            return [IsAuthenticated(), IsSchoolAdminOrAdmissionsOfficer()]
-        return [IsAuthenticated(), IsParentLinked() | IsSchoolAdminOrAdmissionsOfficer()]
 
-
-class EnrollmentViewSet(viewsets.ModelViewSet):
+class EnrollmentViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+    policy = "enrollments"
+    school_path = "student__school"
+    student_path = "student"
     queryset = Enrollment.objects.select_related("student", "academic_year", "term", "class_field", "stream").all()
     serializer_class = EnrollmentSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["student__first_name", "student__last_name"]
     ordering_fields = ["enrollment_date", "status"]
     ordering = ["-enrollment_date"]
 
-    def get_permissions(self):
-        if self.action in {"create", "update", "partial_update", "destroy"}:
-            return [IsAuthenticated(), IsSchoolAdminOrAdmissionsOfficer()]
-        return [IsAuthenticated(), IsParentLinked() | IsStudentOwner() | IsSchoolAdminOrAdmissionsOfficer()]
 
-
-class StudentDocumentViewSet(viewsets.ModelViewSet):
+class StudentDocumentViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+    policy = "documents"
+    school_path = "student__school"
+    student_path = "student"
     queryset = StudentDocument.objects.select_related("student").all()
     serializer_class = StudentDocumentSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["student__first_name", "student__last_name", "document_type"]
     ordering_fields = ["uploaded_at", "document_type"]
     ordering = ["-uploaded_at"]
-
-    def get_permissions(self):
-        if self.action in {"create", "update", "partial_update", "destroy"}:
-            return [IsAuthenticated(), IsSchoolAdminOrAdmissionsOfficer()]
-        return [IsAuthenticated(), IsParentLinked() | IsStudentOwner() | IsSchoolAdminOrAdmissionsOfficer()]

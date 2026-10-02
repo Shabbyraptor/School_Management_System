@@ -5,13 +5,12 @@ from typing import Any
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from core.access import ScopedQuerysetMixin
 from .constants import AuditActionChoices
 from .models import AuditLog, School
-from .permissions import IsSchoolAdmin, IsSuperAdmin
 from .serializers import (
     AuditLogSerializer,
     SchoolCreateSerializer,
@@ -28,10 +27,11 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class SchoolViewSet(viewsets.ModelViewSet):
+class SchoolViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+    policy = "schools"
+    school_path = "id"
     queryset = School.objects.all()
     serializer_class = SchoolSerializer
-    permission_classes = [IsAuthenticated, IsSchoolAdmin]
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "code", "registration_number", "email", "city", "country"]
@@ -142,10 +142,11 @@ class SchoolViewSet(viewsets.ModelViewSet):
         return Response(output_serializer.data)
 
 
-class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+class AuditLogViewSet(ScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
+    policy = "audit_logs"
+    school_path = "school"
     queryset = AuditLog.objects.select_related("user", "school").all()
     serializer_class = AuditLogSerializer
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["action", "model_name", "object_id", "description", "ip_address"]

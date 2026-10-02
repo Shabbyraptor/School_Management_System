@@ -52,7 +52,8 @@ class AttendanceModelTests(TestCase):
         record.mark_late()
         self.assertEqual(record.status, AttendanceStatus.LATE)
 
-        summary = AttendanceSummary.objects.create(student=self.student, academic_year=self.academic_year, term=self.term, present_days=1, absent_days=0, late_days=1, excused_days=0)
+        # Marking attendance already created this summary (attendance.signals); overwrite its counts.
+        summary, _ = AttendanceSummary.objects.update_or_create(student=self.student, academic_year=self.academic_year, term=self.term, defaults={"present_days": 1, "absent_days": 0, "late_days": 1, "excused_days": 0})
         summary.refresh()
         self.assertGreaterEqual(summary.attendance_percentage, 0)
 

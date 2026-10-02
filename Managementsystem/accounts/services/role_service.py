@@ -15,6 +15,15 @@ class RoleService:
             UserRole.objects.get_or_create(user=user, role=role)
 
     @staticmethod
+    def set_roles(user: User, role_codes: Iterable[str]) -> list[str]:
+        """Replace the user's roles with exactly these codes (unknown codes are ignored)."""
+        roles = list(Role.objects.filter(code__in=list(role_codes)))
+        UserRole.objects.filter(user=user).exclude(role__in=roles).delete()
+        for role in roles:
+            UserRole.objects.get_or_create(user=user, role=role)
+        return [role.code for role in roles]
+
+    @staticmethod
     def remove_role(user: User, role_code: str) -> None:
         UserRole.objects.filter(user=user, role__code=role_code).delete()
 

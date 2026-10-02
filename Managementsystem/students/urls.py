@@ -10,10 +10,11 @@ from .views import (
 )
 
 router = DefaultRouter()
-router.register(r"", StudentViewSet, basename="student")
 router.register(r"parents", ParentViewSet, basename="parent")
 router.register(r"guardians", GuardianViewSet, basename="guardian")
 router.register(r"enrollments", EnrollmentViewSet, basename="enrollment")
 router.register(r"documents", StudentDocumentViewSet, basename="document")
+# Registered last: its empty prefix makes "/<pk>/" match "guardians/" etc. if it comes first.
+router.register(r"", StudentViewSet, basename="student")
 
 urlpatterns = [path("", include(router.urls))]

@@ -6,7 +6,7 @@ from .models import EmergencyContact, Enrollment, Guardian, Parent, ParentStuden
 
 
 class StudentSerializer(serializers.ModelSerializer):
-    full_name = serializers.ReadOnlyField(source="full_name")
+    full_name = serializers.ReadOnlyField()
 
     class Meta:
         model = Student

@@ -5,8 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.access import RolePolicy, ScopedQuerysetMixin
 from .models import AttendanceRecord, AttendanceSession, AttendanceSummary
-from .permissions import CanManageAttendance
 from .serializers import (
     AttendanceRecordSerializer,
     AttendanceSessionCreateSerializer,
@@ -17,10 +17,11 @@ from .serializers import (
 from .services import AttendanceService, AttendanceSessionService
 
 
-class AttendanceSessionViewSet(viewsets.ModelViewSet):
+class AttendanceSessionViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+    policy = "attendance"
+    school_path = "school"
     queryset = AttendanceSession.objects.select_related("school", "academic_year", "term", "class_field", "stream", "teacher").prefetch_related("records")
     serializer_class = AttendanceSessionSerializer
-    permission_classes = [IsAuthenticated, CanManageAttendance]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["reference", "remarks"]
     ordering_fields = ["attendance_date", "created_at"]
@@ -43,26 +44,33 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         return Response(AttendanceSessionSerializer(session).data, status=status.HTTP_200_OK)
 
 
-class AttendanceRecordViewSet(viewsets.ModelViewSet):
+class AttendanceRecordViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+    policy = "attendance"
+    school_path = "attendance_session__school"
     queryset = AttendanceRecord.objects.select_related("attendance_session", "student", "marked_by")
     serializer_class = AttendanceRecordSerializer
-    permission_classes = [IsAuthenticated, CanManageAttendance]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["student__first_name", "student__last_name", "status"]
     ordering_fields = ["time_marked", "status"]
 
+    def perform_create(self, serializer):
+        serializer.save(marked_by=self.request.user)
 
-class AttendanceSummaryViewSet(viewsets.ReadOnlyModelViewSet):
+
+class AttendanceSummaryViewSet(ScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
+    policy = "attendance_summaries"
+    school_path = "student__school"
+    student_path = "student"
     queryset = AttendanceSummary.objects.select_related("student", "academic_year", "term")
     serializer_class = AttendanceSummarySerializer
-    permission_classes = [IsAuthenticated, CanManageAttendance]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["student__first_name", "student__last_name"]
     ordering_fields = ["attendance_percentage", "last_updated"]
 
 
 class AttendanceReportViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated, CanManageAttendance]
+    policy = "attendance"
+    permission_classes = [IsAuthenticated, RolePolicy]
 
     @action(detail=False, methods=["get"], url_path="daily")
     def daily(self, request):
@@ -78,7 +86,8 @@ class AttendanceReportViewSet(viewsets.ViewSet):
 
 
 class AttendanceBulkViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated, CanManageAttendance]
+    policy = "attendance"
+    permission_classes = [IsAuthenticated, RolePolicy]
 
     @action(detail=False, methods=["post"], url_path="bulk")
     def bulk(self, request):

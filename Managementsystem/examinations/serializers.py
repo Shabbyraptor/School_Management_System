@@ -8,19 +8,19 @@ from .models import Exam, ExamType, GradeScale, Mark, Ranking, Result
 class ExamTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExamType
-        fields = ["id", "name", "code", "description", "is_active"]
+        fields = ["id", "school", "name", "code", "description", "is_active"]
 
 
 class ExamSerializer(serializers.ModelSerializer):
     class Meta:
         model = Exam
-        fields = ["id", "name", "code", "assessment_type", "total_marks", "pass_mark", "start_date", "end_date", "status", "is_published"]
+        fields = ["id", "school", "exam_type", "academic_year", "term", "class_name", "stream", "subject", "name", "code", "assessment_type", "total_marks", "pass_mark", "start_date", "end_date", "status", "is_published"]
 
 
 class GradeScaleSerializer(serializers.ModelSerializer):
     class Meta:
         model = GradeScale
-        fields = ["id", "name", "minimum_mark", "maximum_mark", "grade", "remarks", "order"]
+        fields = ["id", "school", "name", "minimum_mark", "maximum_mark", "grade", "remarks", "order"]
 
 
 class MarkSerializer(serializers.ModelSerializer):

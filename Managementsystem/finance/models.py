@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -14,6 +15,11 @@ from students.models import Student
 from .constants import Currency, DiscountType, InvoiceStatus, PaymentMethod, PaymentStatus
 from .utils import calculate_balance, calculate_invoice_total, default_due_date, generate_invoice_number, generate_receipt_number
 from .validators import validate_discount_value, validate_invoice_totals, validate_non_negative_amount, validate_payment_amount
+
+
+def placeholder_number() -> str:
+    """Unique stand-in for a number that is derived from the pk once the row exists."""
+    return f"TMP-{uuid4().hex}"
 
 
 class FeeCategory(BaseModel):
@@ -116,14 +122,21 @@ class Invoice(BaseModel):
             raise ValidationError("Invoice totals cannot be negative.")
 
     def save(self, *args, **kwargs) -> None:
-        if not self.invoice_number:
-            self.invoice_number = generate_invoice_number(self.school.code, self.academic_year.code, self.pk)
+        # The number embeds the pk, which only exists after the first insert, so save
+        # under a unique placeholder and then write the real number.
+        assign_number = not self.invoice_number
+        if assign_number:
+            self.invoice_number = placeholder_number()
         if not self.total_amount:
             self.total_amount = calculate_invoice_total(self.subtotal, self.discount_amount, self.scholarship_amount, self.penalty_amount)
         if self.balance == Decimal("0.00"):
             self.balance = self.total_amount
         self.full_clean()
-        return super().save(*args, **kwargs)
+        result = super().save(*args, **kwargs)
+        if assign_number:
+            self.invoice_number = generate_invoice_number(self.school.code, self.academic_year.code, self.pk)
+            super().save(update_fields=["invoice_number"])
+        return result
 
     def calculate_balance(self) -> Decimal:
         return calculate_balance(self.total_amount, sum(self.payments.values_list("amount", flat=True)))
@@ -192,14 +205,25 @@ class Payment(BaseModel):
         super().clean()
         validate_non_negative_amount(self.amount)
         if self.invoice_id and self.amount:
-            balance = self.invoice.balance if self.invoice.balance else self.invoice.total_amount
+            # The invoice balance is kept current by LedgerService; when editing an existing
+            # successful payment, its own amount is already deducted from that balance.
+            balance = self.invoice.balance
+            if self.pk:
+                previous = Payment.objects.filter(pk=self.pk, status=PaymentStatus.SUCCESSFUL).values_list("amount", flat=True).first()
+                balance += previous or Decimal("0.00")
             validate_payment_amount(self.amount, balance)
 
     def save(self, *args, **kwargs) -> None:
-        if not self.payment_reference:
-            self.payment_reference = generate_receipt_number(self.school.code, self.pk)
+        # Same pk-after-insert issue as Invoice.save.
+        assign_reference = not self.payment_reference
+        if assign_reference:
+            self.payment_reference = placeholder_number()
         self.full_clean()
-        return super().save(*args, **kwargs)
+        result = super().save(*args, **kwargs)
+        if assign_reference:
+            self.payment_reference = generate_receipt_number(self.school.code, self.pk)
+            super().save(update_fields=["payment_reference"])
+        return result
 
     def validate_payment(self) -> None:
         self.status = PaymentStatus.SUCCESSFUL

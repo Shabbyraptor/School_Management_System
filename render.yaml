@@ -1,0 +1,49 @@
+# Render blueprint for the Scholaris API.
+# Secrets and anything host-specific use `sync: false`, so they are entered in the
+# Render dashboard and never committed here.
+
+databases:
+  - name: scholaris-db
+    databaseName: scholaris
+    user: scholaris
+    plan: free
+
+services:
+  - type: web
+    name: scholaris-api
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: "./build.sh"
+    startCommand: "cd Managementsystem && gunicorn Managementsystem.wsgi:application --bind 0.0.0.0:$PORT --log-file -"
+    healthCheckPath: /healthz/
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: scholaris-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: PYTHON_VERSION
+        value: "3.13.4"
+      # Render also injects RENDER_EXTERNAL_HOSTNAME, which settings.py appends to
+      # ALLOWED_HOSTS, so this only needs setting for a custom domain.
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false
+      # The deployed frontend's origin, scheme included. Must be set or the
+      # browser blocks every API call.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        sync: false
+      # Set to False if migrate cannot negotiate SSL on the internal database host.
+      - key: DJANGO_DB_SSL_REQUIRE
+        value: "True"
+      # First deploy only. See build.sh.
+      - key: RUN_SEED
+        value: "0"
+      - key: SEED_ADMIN_PASSWORD
+        sync: false

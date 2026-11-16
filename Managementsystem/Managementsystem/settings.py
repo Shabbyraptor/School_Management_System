@@ -10,22 +10,74 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+# --- Environment -------------------------------------------------------------
+# Anything that differs between machines (secrets, hostnames, debug) is read from
+# the environment. For local work put it in a .env file next to manage.py; see
+# .env.example. That file is git-ignored - real secrets never go in this module.
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#gx&ku1ek77r9yz#2e-q@rup#_j&tx=gd2lcm^%370v2$g6ytk'
+
+def _load_env_file(path: Path) -> None:
+    """Minimal KEY=value reader so no extra dependency is needed."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, _, value = line.partition('=')
+        # Real environment variables always win over the file.
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file(BASE_DIR / '.env')
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    return os.environ.get(name, str(default)).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def env_list(name: str, default: str = '') -> list[str]:
+    return [item.strip() for item in os.environ.get(name, default).split(',') if item.strip()]
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DJANGO_DEBUG', True)
 
-ALLOWED_HOSTS = []
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY must be set when DEBUG is off. Generate one with: '
+            'python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"'
+        )
+    # Development only. Never used when DEBUG is off, per the check above.
+    SECRET_KEY = 'django-insecure-local-development-key-not-for-deployment'
+
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1' if DEBUG else '')
+
+CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
+
+if not DEBUG:
+    # Standard deployment hardening; assumes TLS terminates at a proxy.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
 
 
 # Application definition
@@ -70,17 +122,14 @@ REST_FRAMEWORK = {
 }
 
 from datetime import timedelta
-import os
 
 # Frontend origins allowed to call the API (comma-separated in CORS_ALLOWED_ORIGINS).
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get(
-        'CORS_ALLOWED_ORIGINS',
-        'http://localhost:5180,http://127.0.0.1:5180,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080',
-    ).split(',')
-    if origin.strip()
-]
+CORS_ALLOWED_ORIGINS = env_list(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5180,http://127.0.0.1:5180,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080'
+    if DEBUG
+    else '',
+)
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),

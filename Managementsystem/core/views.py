@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from rest_framework import filters, status, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -19,6 +20,18 @@ from .serializers import (
 )
 from .services.audit_service import AuditLogService
 from .services.school_service import SchoolService
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health_check(request: Request) -> Response:
+    """Liveness probe for the host's health check.
+
+    Deliberately unauthenticated and does not touch the database: every other
+    endpoint requires a token, so a platform health check would otherwise read
+    401 as a failing service and never route traffic to it.
+    """
+    return Response({"status": "ok"})
 
 
 class StandardResultsSetPagination(PageNumberPagination):

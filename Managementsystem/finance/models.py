@@ -204,7 +204,7 @@ class Payment(BaseModel):
     def clean(self) -> None:
         super().clean()
         validate_non_negative_amount(self.amount)
-        if self.invoice_id and self.amount:
+        if self.invoice_id and self.amount is not None:
             # The invoice balance is kept current by LedgerService; when editing an existing
             # successful payment, its own amount is already deducted from that balance.
             balance = self.invoice.balance
